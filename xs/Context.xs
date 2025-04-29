@@ -80,6 +80,24 @@ accept(context, acc_cred, in_token, binding, out_name, out_mech, out_token, out_
 				       &in_token, binding, out_name, out_mech,
 				       &out_token, out_flags, out_time,
 				       delegated_cred);
+#if !defined(HEIMDAL)
+	if (out_mech && *out_mech) {
+		/* RFC 2744 documents that the returned *out_mech is a pointer
+		 * to static data. To prevent from freeing them when destructing
+		 * out_mech, we change *out_mech into a pointer to a heap-allocated
+		 * buffer with the same content. Otherwise, MITKRB5-provided
+		 * gss_release_oid() deallocator which cannot recognize this static
+		 * storage would crash. We use malloc() because gss_release_oid() used
+		 * free(). */
+		GSSAPI__OID copy = malloc(sizeof(*copy));
+		if (!copy) croak("Not enough memory for copying out_mech!");
+		copy->elements = malloc((*out_mech)->length);
+		if (!copy->elements) croak("Not enough memory for copying out_mech!");
+		memcpy(copy->elements, (*out_mech)->elements, (*out_mech)->length);
+		copy->length = (*out_mech)->length;
+		*out_mech = copy;
+    }
+#endif
     OUTPUT:
 	RETVAL
 	context
